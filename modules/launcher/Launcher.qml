@@ -321,7 +321,9 @@ Item {
                                     anchors.verticalCenter: parent.verticalCenter
                                     width: 26
                                     height: 26
-                                    source: Quickshell.iconPath(resultRow.modelData.icon, "application-x-executable")
+                                    // Prefer a file resolved by the scanner. It avoids Qt's
+                                    // incomplete icon-theme lookup under standalone Hyprland.
+                                    source: resultRow.modelData.iconPath || Quickshell.iconPath(resultRow.modelData.icon, "application-x-executable")
                                     smooth: true
                                 }
 
