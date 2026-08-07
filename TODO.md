@@ -1,19 +1,18 @@
-# TODO
+# Roadmap
 
-Панель уже выполняет свою базовую задачу. Ниже — спокойный список того, что
-можно добавлять дальше по мере необходимости.
+The shell now has its core bar and application launcher. These are the next
+additions worth considering when they become useful.
 
-## Следующее
+## Next
 
-- [ ] Добавить центр уведомлений: история, быстрый просмотр и кнопка «очистить всё».
-- [ ] Сделать меню быстрых настроек для Wi-Fi, Bluetooth, яркости и звука.
-- [ ] Вернуть запуск приложений с поиском по `.desktop`-файлам и горячей клавишей.
-- [ ] Добавить управление обоями: выбор папки, случайная смена и сохранение текущего фона.
+- [ ] Add a notification centre with history, quick preview, and a clear-all action.
+- [ ] Add a quick-settings menu for Wi-Fi, Bluetooth, brightness, and audio.
+- [ ] Add wallpaper management: folder selection, random rotation, and current-wallpaper persistence.
 
-## Когда появится потребность
+## Later
 
-- [ ] Индикатор батареи и профиль питания для ноутбука.
-- [ ] Виджет проигрывателя с обложкой, названием трека и кнопками управления.
-- [ ] Календарь, список ближайших событий и удобный режим «не беспокоить».
-- [ ] Настройки темы: палитра, высота панели, шрифт и расположение блоков.
-- [ ] Разнести пользовательские параметры в отдельный конфигурационный файл.
+- [ ] Add a battery indicator and power profile for laptops.
+- [ ] Add a media widget with cover art, track title, and playback controls.
+- [ ] Add a calendar, upcoming-event list, and a convenient do-not-disturb mode.
+- [ ] Add theme settings for palette, bar height, font, and module layout.
+- [ ] Move user-facing options into a dedicated configuration file.

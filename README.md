@@ -1,28 +1,49 @@
-# Minimal Quickshell bar
+# Minimal Quickshell shell
 
-Небольшая и намеренно базовая конфигурация для [Quickshell](https://quickshell.outfoxxed.me/).
+A small, intentionally focused [Quickshell](https://quickshell.outfoxxed.me/) configuration.
 
-Сейчас здесь есть только верхняя панель — без лаунчера, центра уведомлений,
-виджетов и других окон. Это чистая отправная точка, которую легко переделывать
-под себя.
+It currently provides a top bar and a minimal application launcher. Other
+surfaces—such as a notification centre, widgets, and additional popups—are
+deliberately left out.
 
-## Что уже есть
+## Included
 
-- рабочие пространства Hyprland;
-- часы;
-- системный трей;
-- текущая раскладка клавиатуры;
-- управление громкостью: колёсико меняет уровень, правый клик включает mute.
+- Hyprland workspaces;
+- clock and system tray;
+- current keyboard layout;
+- PipeWire volume control: scroll to adjust volume, right-click to mute;
+- application launcher: searches installed `.desktop` entries and supports
+  keyboard navigation, mouse selection, and Enter to launch.
 
-## Запуск
+## Application launcher
 
-Размести папку в `~/.config/quickshell`, затем запусти:
+Open or close the launcher with:
+
+```bash
+quickshell ipc call launcher toggle
+```
+
+For Hyprland, add a binding such as `Super + Space` to its configuration:
+
+```ini
+bind = SUPER, SPACE, exec, quickshell ipc call launcher toggle
+```
+
+The launcher opens on the focused monitor. After installing or removing
+applications, refresh its index without reloading the shell:
+
+```bash
+quickshell ipc call launcher reload
+```
+
+## Running
+
+Place this directory at `~/.config/quickshell`, then run:
 
 ```bash
 quickshell -p ~/.config/quickshell
 ```
 
-Если Quickshell уже использует конфигурацию из этого пути, достаточно команды
-`quickshell`.
+If Quickshell already uses this configuration path, `quickshell` is enough.
 
-Идеи для развития собраны в [TODO.md](TODO.md).
+Future ideas are collected in [TODO.md](TODO.md).
