@@ -17,6 +17,7 @@ RowLayout {
     readonly property var windowTitleIconRules: [
         { re: /.*Picture in picture.*/i, icon: "󰹗" },
         { re: /.*Picture-in-picture.*/i, icon: "󰹗" },
+        { re: /.*yazi.*/i, icon: "󰉋" },
         { re: /.*nvim.*/i, icon: "" }
     ]
 
@@ -93,11 +94,13 @@ RowLayout {
     Repeater {
         model: root.isSpecialWorkspaceOpen ? [] : root.visibleWorkspaceIds
 
-        delegate: RowLayout {
+        // Size one click target around both the workspace label and its window icons.
+        delegate: Item {
             id: workspaceDelegate
             required property int modelData
             readonly property int workspaceId: modelData
-            spacing: 4
+            implicitWidth: workspaceContent.implicitWidth
+            implicitHeight: workspaceContent.implicitHeight
 
             // Resolve the workspace object from the numeric model value so its
             // dynamic window list can be displayed by the nested repeater.
@@ -116,36 +119,42 @@ RowLayout {
             readonly property bool hasWindows: workspaceDelegate.workspace
                 && workspaceDelegate.workspace.toplevels.values.length > 0
 
-            Text {
-                text: workspaceDelegate.workspaceId + (workspaceDelegate.hasWindows ? ":" : "")
-                font.family: Services.Theme.fontFamily
-                font.pixelSize: Services.Theme.fontSize
-                font.bold: workspaceDelegate.isActive
-                color: workspaceDelegate.isActive ? Services.Theme.accentActive : Services.Theme.textDim
+            RowLayout {
+                id: workspaceContent
+                anchors.fill: parent
+                spacing: 4
 
-                MouseArea {
-                    anchors.fill: parent
-                    cursorShape: Qt.PointingHandCursor
-                    onClicked: Hyprland.dispatch(`hl.dsp.focus({workspace = ${workspaceDelegate.workspaceId}})`)
+                Text {
+                    text: workspaceDelegate.workspaceId + (workspaceDelegate.hasWindows ? ":" : "")
+                    font.family: Services.Theme.fontFamily
+                    font.pixelSize: Services.Theme.fontSize
+                    font.bold: workspaceDelegate.isActive
+                    color: workspaceDelegate.isActive ? Services.Theme.accentActive : Services.Theme.textDim
+                }
+
+                // Show one glyph for every window on this workspace.
+                Repeater {
+                    model: workspaceDelegate.workspace ? workspaceDelegate.workspace.toplevels : []
+
+                    delegate: Text {
+                        required property var modelData
+                        text: root.iconForWindow(modelData)
+                        font.family: Services.Theme.fontFamily
+                        font.pixelSize: Services.Theme.fontSize
+                        color: workspaceDelegate.isActive ? Services.Theme.accentActive : Services.Theme.textDim
+                    }
                 }
             }
 
-            // Show one glyph for every window on this workspace.
-            Repeater {
-                model: workspaceDelegate.workspace ? workspaceDelegate.workspace.toplevels : []
-
-                delegate: Text {
-                    required property var modelData
-                    text: root.iconForWindow(modelData)
-                    font.family: Services.Theme.fontFamily
-                    font.pixelSize: Services.Theme.fontSize
-                    color: workspaceDelegate.isActive ? Services.Theme.accentActive : Services.Theme.textDim
-                }
+            MouseArea {
+                anchors.fill: parent
+                cursorShape: Qt.PointingHandCursor
+                onClicked: Hyprland.dispatch(`hl.dsp.focus({workspace = ${workspaceDelegate.workspaceId}})`)
             }
         }
     }
 
-    // The special workspace is shown in place of regular workspaces when open.
+    // Replace regular workspaces with the active special workspace to avoid two active entries.
     RowLayout {
         visible: root.isSpecialWorkspaceOpen
         spacing: 4
@@ -158,12 +167,6 @@ RowLayout {
             font.pixelSize: Services.Theme.fontSize
             font.bold: true
             color: Services.Theme.accentActive
-
-            MouseArea {
-                anchors.fill: parent
-                cursorShape: Qt.PointingHandCursor
-                onClicked: Hyprland.dispatch(`hl.dsp.workspace.toggle_special("special")`)
-            }
         }
 
         Repeater {
