@@ -1,9 +1,3 @@
-//! Emit visible desktop applications as a small JSON list for the QML launcher.
-//!
-//! Faithful Rust port of the original Python script: same XDG lookup order,
-//! same GTK-icon-theme fallback for Hyprland/Quickshell, same icon resolution
-//! algorithm (theme -> Inherits chain -> any installed theme -> generic icon).
-
 use std::cell::RefCell;
 use std::collections::{HashMap, HashSet, VecDeque};
 use std::env;
@@ -13,6 +7,9 @@ use std::path::{Path, PathBuf};
 use serde::Serialize;
 
 const ICON_EXTENSIONS: [&str; 4] = [".svg", ".png", ".webp", ".xpm"];
+/// The launcher renders icons at 26 logical pixels. Prefer a 64 px raster
+/// source so the result stays sharp on high-DPI displays as well.
+const PREFERRED_RASTER_ICON_SIZE: u32 = 64;
 
 #[derive(Serialize)]
 struct Application {
@@ -66,10 +63,6 @@ fn data_directories() -> Vec<PathBuf> {
 // ---------------------------------------------------------------------
 
 /// Read a single `[section_name]` group from an INI-style file.
-///
-/// `case_sensitive` mirrors Python's `configparser`: desktop entries are
-/// read with `optionxform = str` (case-sensitive), while icon-theme files
-/// are read with the default (case-insensitive) behaviour.
 fn read_ini_section(
     path: &Path,
     section_name: &str,
@@ -114,9 +107,6 @@ fn parse_bool(value: Option<&String>) -> Option<bool> {
     }
 }
 
-/// Percent-encode an absolute path into a `file://` URI, the same way
-/// Python's `Path.as_uri()` does: bytes outside `[A-Za-z0-9._~-]` are
-/// escaped, `/` is kept as the path separator.
 fn path_to_file_uri(path: &Path) -> String {
     let path_str = path.to_string_lossy();
     let mut encoded = String::from("file://");
@@ -135,9 +125,6 @@ fn path_to_file_uri(path: &Path) -> String {
 // Icon theme resolution
 // ---------------------------------------------------------------------
 
-/// Holds the memoization caches that the Python version got for free via
-/// `functools.cache`. The tool is single-threaded and short-lived, so plain
-/// `RefCell`s are enough - no `Mutex` needed.
 struct IconResolver {
     theme_roots: Vec<PathBuf>,
     configured_theme: String,
@@ -213,24 +200,81 @@ impl IconResolver {
                 .collect()
         };
 
-        let mut result = String::new();
-        'search: for root in &self.theme_roots {
+        let mut best: Option<(String, (u8, u32))> = None;
+        for root in &self.theme_roots {
             let theme_root = root.join(theme);
             for directory in &directories {
                 for candidate in &filenames {
                     let path = theme_root.join(directory).join(candidate);
                     if path.is_file() {
-                        result = path_to_file_uri(&path);
-                        break 'search;
+                        let extension = path
+                            .extension()
+                            .and_then(|extension| extension.to_str())
+                            .unwrap_or_default();
+                        let format_score = u8::from(extension.eq_ignore_ascii_case("svg"));
+                        let raster_score = self.icon_directory_score(theme, directory);
+                        let score = (format_score, raster_score);
+                        let uri = path_to_file_uri(&path);
+
+                        if best
+                            .as_ref()
+                            .is_none_or(|(_, best_score)| score > *best_score)
+                        {
+                            best = Some((uri, score));
+                        }
                     }
                 }
             }
         }
 
+        let result = best.map(|(path, _)| path).unwrap_or_default();
+
         self.themed_path_cache
             .borrow_mut()
             .insert(cache_key, result.clone());
         result
+    }
+
+    /// Score a raster icon directory by how well it suits the launcher's
+    /// rendered size. `index.theme` directory order is not a quality order:
+    /// it commonly starts with `16x16`, which was causing visibly blurred
+    /// icons when Qt enlarged that first match.
+    fn icon_directory_score(&self, theme: &str, directory: &str) -> u32 {
+        let index_path_score = self
+            .theme_roots
+            .iter()
+            .map(|root| root.join(theme).join("index.theme"))
+            .find_map(|index_path| {
+                read_ini_section(&index_path, directory, false).and_then(|section| {
+                    let size = section.get("size")?.parse::<u32>().ok()?;
+                    let scale = section
+                        .get("scale")
+                        .and_then(|scale| scale.parse::<u32>().ok())
+                        .unwrap_or(1);
+                    Some(size.saturating_mul(scale))
+                })
+            });
+
+        let size = index_path_score.or_else(|| {
+            directory
+                .split('/')
+                .find_map(|part| part.split_once('x'))
+                .and_then(|(width, height)| {
+                    (width == height)
+                        .then(|| width.parse::<u32>().ok())
+                        .flatten()
+                })
+        });
+
+        match size {
+            // Prefer the smallest source that is still large enough, avoiding
+            // both upscaling and needlessly loading huge bitmap assets.
+            Some(size) if size >= PREFERRED_RASTER_ICON_SIZE => {
+                10_000 - (size - PREFERRED_RASTER_ICON_SIZE).min(9_999)
+            }
+            Some(size) => size,
+            None => 0,
+        }
     }
 
     /// Resolve a desktop-entry icon to a file Qt can always load directly.
@@ -367,7 +411,10 @@ fn current_desktops() -> HashSet<String> {
 }
 
 fn is_visible(entry: &HashMap<String, String>, desktops: &HashSet<String>) -> bool {
-    let entry_type = entry.get("Type").map(String::as_str).unwrap_or("Application");
+    let entry_type = entry
+        .get("Type")
+        .map(String::as_str)
+        .unwrap_or("Application");
     if entry_type != "Application" {
         return false;
     }
