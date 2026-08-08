@@ -25,7 +25,7 @@ deliberately left out.
 
 ## Setup
 
-1. Clone this repository to `~/.config/quickshell`.
+1. Clone this repository to `~/.config/quickshell` or a path of your choice.
 2. Build the launcher helper:
 
    ```bash
@@ -35,10 +35,10 @@ deliberately left out.
 3. Run:
 
    ```bash
-   quickshell -p ~/.config/quickshell
+   quickshell -p /path/to/shell.qml
    ```
 
-   If Quickshell already uses this configuration path, `quickshell` is enough.
+   If you used the default path, running `quickshell` is enough.
 
 ## Application launcher
 
