@@ -402,23 +402,23 @@ Item {
                         spacing: 15
 
                         Text {
-                            text: "↵ open"
+                            text: "󱞥 open"
                             font.family: Services.Theme.fontFamily
-                            font.pixelSize: 11
+                            font.pixelSize: 12
                             color: Services.Theme.textDim
                         }
 
                         Text {
-                            text: "↑↓ navigate"
+                            text: "󱦲󱦳 navigate"
                             font.family: Services.Theme.fontFamily
-                            font.pixelSize: 11
+                            font.pixelSize: 12
                             color: Services.Theme.textDim
                         }
 
                         Text {
                             text: "esc close"
                             font.family: Services.Theme.fontFamily
-                            font.pixelSize: 11
+                            font.pixelSize: 12
                             color: Services.Theme.textDim
                         }
 

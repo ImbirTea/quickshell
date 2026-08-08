@@ -26,7 +26,7 @@ Item {
     Process {
         id: applicationQuery
 
-        command: ["python3", Quickshell.shellPath("modules/launcher/list-applications.py")]
+        command: [Quickshell.shellPath("modules/launcher/list-applications")]
         onExited: (exitCode) => {
             root.loading = false;
             if (exitCode !== 0) {
