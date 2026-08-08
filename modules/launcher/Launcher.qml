@@ -1,5 +1,7 @@
 import "../services" as Services
 import QtQuick
+import QtQuick.Layouts
+import Qt.labs.settings
 import Quickshell
 import Quickshell.Hyprland
 import Quickshell.Wayland
@@ -12,7 +14,17 @@ Item {
     property string targetScreenName: ""
     property string query: ""
     property int selectedIndex: 0
+    readonly property var pinnedApplicationIds: launcherSettings.pinnedApplicationIds || []
     readonly property var matches: filterApplications(query)
+
+    Settings {
+        id: launcherSettings
+
+        category: "application-launcher"
+        // Keep IDs instead of whole application objects: desktop metadata can
+        // change between reloads, while the desktop-file ID remains stable.
+        property var pinnedApplicationIds: []
+    }
 
     function normalize(value) {
         return (value || "").toLocaleLowerCase();
@@ -53,9 +65,40 @@ Item {
         scored.sort((left, right) => {
             return right.score - left.score || left.application.name.localeCompare(right.application.name);
         });
-        return scored.map((item) => {
+        const applications = scored.map((item) => {
             return item.application;
         });
+        // Preserve the order in which apps were pinned. A newly pinned app is
+        // appended to the stored IDs, so it appears below existing pins.
+        const pinned = [];
+        const unpinned = [];
+        for (const pinnedId of pinnedApplicationIds) {
+            for (const application of applications) {
+                if (application.id === pinnedId) {
+                    pinned.push(application);
+                    break;
+                }
+            }
+        }
+        for (const application of applications) {
+            if (pinnedApplicationIds.indexOf(application.id) === -1)
+                unpinned.push(application);
+        }
+        return pinned.concat(unpinned);
+    }
+
+    function isPinned(applicationId) {
+        return pinnedApplicationIds.indexOf(applicationId) !== -1;
+    }
+
+    function togglePinned(applicationId) {
+        const pins = pinnedApplicationIds.slice();
+        const index = pins.indexOf(applicationId);
+        if (index === -1)
+            pins.push(applicationId);
+        else
+            pins.splice(index, 1);
+        launcherSettings.pinnedApplicationIds = pins;
     }
 
     function focusedScreenName() {
@@ -95,7 +138,19 @@ Item {
         if (selectedIndex < 0 || selectedIndex >= matches.length)
             return ;
 
-        Quickshell.execDetached(["gtk-launch", matches[selectedIndex].id]);
+        const application = matches[selectedIndex];
+        // gtk-launch cannot discover kitty as a terminal on this system. The
+        // indexer provides a tokenized desktop-entry Exec command, so launch
+        // console applications directly in kitty without involving GLib's
+        // terminal discovery or Quickshell's separate desktop-entry index.
+        if (application.runInTerminal && application.command.length > 0) {
+            Quickshell.execDetached({
+                command: ["kitty"].concat(application.command),
+                workingDirectory: application.workingDirectory
+            });
+        } else {
+            Quickshell.execDetached(["gtk-launch", application.id]);
+        }
         close();
     }
 
@@ -122,6 +177,7 @@ Item {
                 root.query = "";
                 root.selectedIndex = 0;
                 searchInput.text = "";
+                resultList.resetScrollPosition();
                 backdrop.opacity = 0;
                 card.opacity = 0;
                 card.revealProgress = 0.006;
@@ -198,12 +254,12 @@ Item {
                     gradient: Gradient {
                         GradientStop {
                             position: 0
-                            color: Qt.rgba(1, 1, 1, 0.035)
+                            color: Services.Theme.bgTopA
                         }
 
                         GradientStop {
                             position: 1
-                            color: Qt.rgba(1, 1, 1, 0)
+                            color: Services.Theme.bgBottomA
                         }
 
                     }
@@ -300,9 +356,76 @@ Item {
                             clip: true
                             model: root.matches
                             currentIndex: root.selectedIndex
-                            boundsBehavior: Flickable.StopAtBounds
+                            boundsBehavior: Flickable.DragAndOvershootBounds
+                            flickDeceleration: 2800
+                            maximumFlickVelocity: 2400
                             spacing: 3
-                            onCurrentIndexChanged: positionViewAtIndex(currentIndex, ListView.Contain)
+
+                            function resetScrollPosition() {
+                                keyboardScroll.stop();
+                                cancelFlick();
+                                contentY = originY;
+                            }
+
+                            function smoothlyPositionCurrentItem() {
+                                if (currentIndex < 0)
+                                    return ;
+
+                                const rowHeight = 51;
+                                const itemTop = currentIndex * (rowHeight + spacing);
+                                const itemBottom = itemTop + rowHeight;
+                                let targetY = contentY;
+
+                                if (itemTop < contentY)
+                                    targetY = itemTop;
+                                else if (itemBottom > contentY + height)
+                                    targetY = itemBottom - height;
+
+                                const minimumY = originY;
+                                const maximumY = Math.max(minimumY, contentHeight - height + originY);
+                                targetY = Math.max(minimumY, Math.min(maximumY, targetY));
+
+                                if (Math.abs(targetY - contentY) < 1)
+                                    return ;
+
+                                keyboardScroll.stop();
+                                keyboardScroll.from = contentY;
+                                keyboardScroll.to = targetY;
+                                keyboardScroll.restart();
+                            }
+
+                            onCurrentIndexChanged: smoothlyPositionCurrentItem()
+
+                            PropertyAnimation {
+                                id: keyboardScroll
+
+                                target: resultList
+                                property: "contentY"
+                                duration: 180
+                                easing.type: Easing.OutCubic
+                            }
+
+                            rebound: Transition {
+                                NumberAnimation {
+                                    properties: "x,y"
+                                    duration: 260
+                                    easing.type: Easing.OutBack
+                                    easing.overshoot: 0.65
+                                }
+
+                            }
+
+                            highlight: Rectangle {
+                                width: resultList.width
+                                height: 51
+                                radius: 8
+                                color: Qt.rgba(Services.Theme.accent.r, Services.Theme.accent.g, Services.Theme.accent.b, 0.16)
+                            }
+                            highlightFollowsCurrentItem: true
+                            highlightMoveDuration: 140
+                            highlightMoveVelocity: -1
+                            highlightResizeDuration: 120
+                            highlightResizeVelocity: -1
 
                             delegate: Rectangle {
                                 id: resultRow
@@ -313,11 +436,12 @@ Item {
                                 width: resultList.width
                                 height: 51
                                 radius: 8
-                                color: resultRow.index === root.selectedIndex ? Qt.rgba(Services.Theme.accent.r, Services.Theme.accent.g, Services.Theme.accent.b, 0.16) : rowMouse.containsMouse ? Qt.rgba(1, 1, 1, 0.055) : "transparent"
+                                readonly property bool hovered: rowMouse.containsMouse || pinMouse.containsMouse
+                                color: hovered && resultRow.index !== root.selectedIndex ? Qt.rgba(1, 1, 1, 0.055) : "transparent"
 
                                 IconImage {
                                     anchors.left: parent.left
-                                    anchors.leftMargin: 10
+                                    anchors.leftMargin: 38
                                     anchors.verticalCenter: parent.verticalCenter
                                     width: 26
                                     height: 26
@@ -329,7 +453,7 @@ Item {
 
                                 Column {
                                     anchors.left: parent.left
-                                    anchors.leftMargin: 48
+                                    anchors.leftMargin: 76
                                     anchors.right: parent.right
                                     anchors.rightMargin: 14
                                     anchors.verticalCenter: parent.verticalCenter
@@ -362,8 +486,62 @@ Item {
 
                                     anchors.fill: parent
                                     hoverEnabled: true
-                                    onEntered: root.selectedIndex = resultRow.index
-                                    onClicked: root.launchSelected()
+                                    onClicked: {
+                                        if (resultRow.index !== root.selectedIndex)
+                                            root.selectedIndex = resultRow.index;
+                                        else
+                                            root.launchSelected();
+                                    }
+                                }
+
+                                Rectangle {
+                                    id: pinButton
+
+                                    anchors.right: parent.right
+                                    anchors.rightMargin: 14
+                                    anchors.verticalCenter: parent.verticalCenter
+                                    width: 25
+                                    height: 25
+                                    radius: 6
+                                    color: pinMouse.containsMouse ? Qt.rgba(Services.Theme.accent.r, Services.Theme.accent.g, Services.Theme.accent.b, 0.18) : "transparent"
+                                    opacity: resultRow.hovered ? 1 : (root.isPinned(resultRow.modelData.id) ? 0.6 : 0)
+                                    visible: opacity > 0
+                                    z: 1
+
+                                    Text {
+                                        anchors.centerIn: parent
+                                        text: root.isPinned(resultRow.modelData.id) ? "★" : "☆"
+                                        font.family: Services.Theme.fontFamily
+                                        font.pixelSize: 17
+                                        color: root.isPinned(resultRow.modelData.id) ? Services.Theme.accentActive : Services.Theme.textDim
+                                    }
+
+                                    MouseArea {
+                                        id: pinMouse
+
+                                        anchors.fill: parent
+                                        hoverEnabled: true
+                                        onClicked: (mouse) => {
+                                            root.togglePinned(resultRow.modelData.id);
+                                            mouse.accepted = true;
+                                        }
+                                    }
+
+                                    Behavior on opacity {
+                                        NumberAnimation {
+                                            duration: 130
+                                            easing.type: Easing.OutCubic
+                                        }
+
+                                    }
+
+                                    Behavior on color {
+                                        ColorAnimation {
+                                            duration: 190
+                                        }
+
+                                    }
+
                                 }
 
                                 Behavior on color {
@@ -397,31 +575,96 @@ Item {
 
                     }
 
-                    Row {
+                    RowLayout {
                         width: parent.width
-                        spacing: 15
+                        spacing: 8
+
+                        Rectangle {
+                            width: escText.implicitWidth + 9
+                            height: 18
+                            radius: 4
+                            color: Services.Theme.selectionBg
+                            anchors.verticalCenter: parent.verticalCenter
+
+                            Text {
+                                id: escText
+                                anchors.centerIn: parent
+                                text: "esc"
+                                font.family: Services.Theme.fontFamily
+                                font.pixelSize: 10
+                                color: Services.Theme.textDim
+                            }
+                        }
 
                         Text {
-                            text: "󱞥 open"
+                            anchors.verticalCenter: parent.verticalCenter
+                            text: "Close"
                             font.family: Services.Theme.fontFamily
                             font.pixelSize: 12
                             color: Services.Theme.textDim
                         }
 
+
+                        Item {
+                            Layout.fillWidth: true
+                        }
+
                         Text {
-                            text: "󱦲󱦳 navigate"
+                            anchors.verticalCenter: parent.verticalCenter
+                            text: "Open" + (root.matches.length > 0 ? " " + root.matches[root.selectedIndex].name : "")
                             font.family: Services.Theme.fontFamily
                             font.pixelSize: 12
                             color: Services.Theme.textDim
                         }
 
+                        Rectangle {
+                            width: enterText.implicitWidth + 9
+                            height: 18
+                            radius: 4
+                            color: Services.Theme.selectionBg
+                            anchors.verticalCenter: parent.verticalCenter
+
+                            Text {
+                                id: enterText
+                                anchors.centerIn: parent
+                                text: "󱞥"
+                                font.family: Services.Theme.fontFamily
+                                font.pixelSize: 10
+                                color: Services.Theme.textDim
+                            }
+                        }
+
+                        Rectangle {
+                            width: 1
+                            height: 12
+                            color: Qt.rgba(1, 1, 1, 0.08)
+                        }
+
+                        Rectangle {
+                            width: arrowsText.implicitWidth + 9
+                            height: 18
+                            radius: 4
+                            color: Services.Theme.selectionBg
+                            anchors.verticalCenter: parent.verticalCenter
+
+                            Text {
+                                id: arrowsText
+                                anchors.centerIn: parent
+                                text: ""
+                                rotation: 90
+                                font.family: Services.Theme.fontFamily
+                                font.pixelSize: 10
+                                color: Services.Theme.textDim
+                            }
+                        }
+
                         Text {
-                            text: "esc close"
+                            anchors.verticalCenter: parent.verticalCenter
+                            text: "Navigate"
                             font.family: Services.Theme.fontFamily
                             font.pixelSize: 12
                             color: Services.Theme.textDim
                         }
-
                     }
 
                     transform: Translate {

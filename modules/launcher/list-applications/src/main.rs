@@ -10,6 +10,7 @@ const ICON_EXTENSIONS: [&str; 4] = [".svg", ".png", ".webp", ".xpm"];
 /// The launcher renders icons at 26 logical pixels. Prefer a 64 px raster
 /// source so the result stays sharp on high-DPI displays as well.
 const PREFERRED_RASTER_ICON_SIZE: u32 = 64;
+type ThemeMetadata = (Vec<String>, Vec<String>);
 
 #[derive(Serialize)]
 struct Application {
@@ -22,6 +23,11 @@ struct Application {
     #[serde(rename = "iconPath")]
     icon_path: String,
     keywords: String,
+    command: Vec<String>,
+    #[serde(rename = "workingDirectory")]
+    working_directory: String,
+    #[serde(rename = "runInTerminal")]
+    run_in_terminal: bool,
 }
 
 // ---------------------------------------------------------------------
@@ -128,7 +134,7 @@ fn path_to_file_uri(path: &Path) -> String {
 struct IconResolver {
     theme_roots: Vec<PathBuf>,
     configured_theme: String,
-    metadata_cache: RefCell<HashMap<String, (Vec<String>, Vec<String>)>>,
+    metadata_cache: RefCell<HashMap<String, ThemeMetadata>>,
     themed_path_cache: RefCell<HashMap<(String, String), String>>,
     resolve_cache: RefCell<HashMap<String, String>>,
 }
@@ -147,7 +153,7 @@ impl IconResolver {
     /// Read icon directories and inherited themes from `index.theme`,
     /// merging across every theme root that ships a copy (matches the
     /// original's behaviour of accumulating, not overwriting).
-    fn theme_metadata(&self, theme: &str) -> (Vec<String>, Vec<String>) {
+    fn theme_metadata(&self, theme: &str) -> ThemeMetadata {
         if let Some(cached) = self.metadata_cache.borrow().get(theme) {
             return cached.clone();
         }
@@ -410,6 +416,17 @@ fn current_desktops() -> HashSet<String> {
         .collect()
 }
 
+fn executable_in_path(command: &str) -> bool {
+    let path = Path::new(command);
+    if path.is_absolute() || command.contains('/') {
+        return path.is_file();
+    }
+
+    env::var_os("PATH")
+        .map(|paths| env::split_paths(&paths).any(|directory| directory.join(command).is_file()))
+        .unwrap_or(false)
+}
+
 fn is_visible(entry: &HashMap<String, String>, desktops: &HashSet<String>) -> bool {
     let entry_type = entry
         .get("Type")
@@ -430,6 +447,15 @@ fn is_visible(entry: &HashMap<String, String>, desktops: &HashSet<String>) -> bo
         return false;
     }
 
+    // The desktop-entry specification says launchers should hide an entry
+    // whose optional TryExec command is unavailable. Without this check the
+    // launcher displays entries that are guaranteed to fail when selected.
+    if let Some(try_exec) = entry.get("TryExec").filter(|command| !command.is_empty()) {
+        if !executable_in_path(try_exec) {
+            return false;
+        }
+    }
+
     let only_show_in: HashSet<&str> = entry
         .get("OnlyShowIn")
         .map(|s| s.split(';').filter(|v| !v.is_empty()).collect())
@@ -443,6 +469,49 @@ fn is_visible(entry: &HashMap<String, String>, desktops: &HashSet<String>) -> bo
         return false;
     }
     !desktops.iter().any(|d| not_show_in.contains(d.as_str()))
+}
+
+/// Expand the desktop-entry field codes that matter when no files or URLs
+/// were supplied by the launcher. The command is executed directly (never by
+/// a shell), so a desktop file cannot turn its arguments into shell syntax.
+fn expand_exec_argument(argument: &str, name: &str, desktop_file: &Path) -> Option<String> {
+    let mut expanded = String::new();
+    let mut characters = argument.chars();
+
+    while let Some(character) = characters.next() {
+        if character != '%' {
+            expanded.push(character);
+            continue;
+        }
+
+        match characters.next()? {
+            '%' => expanded.push('%'),
+            'c' => expanded.push_str(name),
+            'k' => expanded.push_str(&desktop_file.to_string_lossy()),
+            // No files or URLs are passed from this launcher, so these field
+            // codes expand to nothing. An argument containing only one is
+            // dropped below.
+            'f' | 'F' | 'u' | 'U' | 'i' => {}
+            // Invalid field codes make the entry unusable according to the
+            // desktop-entry spec. Avoid guessing an executable command.
+            _ => return None,
+        }
+    }
+
+    Some(expanded)
+}
+
+fn parse_exec_command(exec: &str, name: &str, desktop_file: &Path) -> Option<Vec<String>> {
+    let arguments = shlex::split(exec)?;
+    let command: Vec<String> = arguments
+        .iter()
+        .map(|argument| expand_exec_argument(argument, name, desktop_file))
+        .collect::<Option<Vec<_>>>()?
+        .into_iter()
+        .filter(|argument| !argument.is_empty())
+        .collect();
+
+    (!command.is_empty()).then_some(command)
 }
 
 fn read_entry(
@@ -469,6 +538,10 @@ fn read_entry(
             .unwrap_or_default()
             .to_string()
     });
+    let command = section
+        .get("Exec")
+        .and_then(|exec| parse_exec_command(exec, &name, path))
+        .unwrap_or_default();
 
     Some(Application {
         id: identifier.to_string(),
@@ -478,6 +551,9 @@ fn read_entry(
         icon,
         icon_path,
         keywords: section.get("Keywords").cloned().unwrap_or_default(),
+        command,
+        working_directory: section.get("Path").cloned().unwrap_or_default(),
+        run_in_terminal: parse_bool(section.get("Terminal")).unwrap_or(false),
     })
 }
 

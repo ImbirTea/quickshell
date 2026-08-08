@@ -13,7 +13,8 @@ deliberately left out.
 - current keyboard layout;
 - PipeWire volume control: scroll to adjust volume, right-click to mute;
 - application launcher: searches installed `.desktop` entries and supports
-  keyboard navigation, mouse selection, and Enter to launch.
+  keyboard navigation, mouse selection, Enter to launch, and persistent
+  pinned applications.
 
 ## Requirements
 
@@ -56,6 +57,12 @@ hl.bind(mainMod .. " + SPACE", hl.dsp.exec_cmd("qs ipc call launcher toggle"))
 
 The launcher opens on the focused monitor.
 
+Hover an application row to reveal its star on the right. Clicking it pins or
+unpinns the application; pins persist between shell restarts and appear first
+in the order they were pinned.
+
+Console applications marked with `Terminal=true` open in `kitty` by default.
+
 After installing or removing applications, refresh the launcher's index
 without reloading the shell:
 
@@ -65,4 +72,3 @@ quickshell ipc call launcher reload
 
 This only re-scans `.desktop` entries—it does not rebuild the helper. If
 `modules/launcher/list-applications` itself changes, run `make build` again.
-
