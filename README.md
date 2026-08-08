@@ -25,8 +25,8 @@ quickshell ipc call launcher toggle
 
 For Hyprland, add a binding such as `Super + Space` to its configuration:
 
-```ini
-bind = SUPER, SPACE, exec, quickshell ipc call launcher toggle
+```lua
+hl.bind(mainMod .. " + SPACE", hl.dsp.exec_cmd("qs ipc call launcher toggle"))
 ```
 
 The launcher opens on the focused monitor. After installing or removing
