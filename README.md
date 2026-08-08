@@ -66,4 +66,3 @@ quickshell ipc call launcher reload
 This only re-scans `.desktop` entries—it does not rebuild the helper. If
 `modules/launcher/list-applications` itself changes, run `make build` again.
 
-Future ideas are collected in [TODO.md](TODO.md).
