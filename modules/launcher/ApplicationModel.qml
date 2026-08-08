@@ -26,7 +26,7 @@ Item {
     Process {
         id: applicationQuery
 
-        command: [Quickshell.shellPath("modules/launcher/list-applications")]
+        command: [Quickshell.shellPath("modules/launcher/list-applications/target/release/list-applications")]
         onExited: (exitCode) => {
             root.loading = false;
             if (exitCode !== 0) {

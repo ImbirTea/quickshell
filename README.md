@@ -15,6 +15,31 @@ deliberately left out.
 - application launcher: searches installed `.desktop` entries and supports
   keyboard navigation, mouse selection, and Enter to launch.
 
+## Requirements
+
+- [Quickshell](https://quickshell.outfoxxed.me/)
+- [Hyprland](https://hyprland.org/)
+- [Rust](https://www.rust-lang.org/tools/install) (`cargo`)—only needed to
+  build `list-applications`, the helper the launcher shells out to for its
+  application index. Nothing else in this repo needs compiling.
+
+## Setup
+
+1. Clone this repository to `~/.config/quickshell`.
+2. Build the launcher helper:
+
+   ```bash
+   make build
+   ```
+
+3. Run:
+
+   ```bash
+   quickshell -p ~/.config/quickshell
+   ```
+
+   If Quickshell already uses this configuration path, `quickshell` is enough.
+
 ## Application launcher
 
 Open or close the launcher with:
@@ -29,21 +54,16 @@ For Hyprland, add a binding such as `Super + Space` to its configuration:
 hl.bind(mainMod .. " + SPACE", hl.dsp.exec_cmd("qs ipc call launcher toggle"))
 ```
 
-The launcher opens on the focused monitor. After installing or removing
-applications, refresh its index without reloading the shell:
+The launcher opens on the focused monitor.
+
+After installing or removing applications, refresh the launcher's index
+without reloading the shell:
 
 ```bash
 quickshell ipc call launcher reload
 ```
 
-## Running
-
-Place this directory at `~/.config/quickshell`, then run:
-
-```bash
-quickshell -p ~/.config/quickshell
-```
-
-If Quickshell already uses this configuration path, `quickshell` is enough.
+This only re-scans `.desktop` entries—it does not rebuild the helper. If
+`modules/launcher/list-applications` itself changes, run `make build` again.
 
 Future ideas are collected in [TODO.md](TODO.md).
