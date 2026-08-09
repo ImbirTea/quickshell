@@ -162,17 +162,13 @@ Item {
             return ;
 
         const application = matches[selectedIndex];
-        // gtk-launch cannot discover kitty as a terminal on this system. The
-        // indexer provides a tokenized desktop-entry Exec command, so launch
-        // console applications directly in kitty without involving GLib's
-        // terminal discovery or Quickshell's separate desktop-entry index.
         if (application.runInTerminal && application.command.length > 0) {
             Quickshell.execDetached({
                 command: ["kitty"].concat(application.command),
                 workingDirectory: application.workingDirectory
             });
         } else {
-            Quickshell.execDetached(["gtk-launch", application.id]);
+            application.execute();
         }
         close();
     }
