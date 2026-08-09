@@ -14,6 +14,7 @@ Item {
     property string targetScreenName: ""
     property string query: ""
     property int selectedIndex: 0
+    readonly property int pinnedSearchScoreBonus: 20
     readonly property var pinnedApplicationIds: launcherSettings.pinnedApplicationIds || []
     readonly property var matches: filterApplications(query)
 
@@ -57,6 +58,10 @@ Item {
                 else
                     score += 15;
             }
+            // Prefer a pinned app when its text match is otherwise equally
+            // strong, without displacing substantially better matches.
+            if (terms.length > 0 && isPinned(application.id))
+                score += pinnedSearchScoreBonus;
             scored.push({
                 "application": application,
                 "score": score
@@ -68,6 +73,11 @@ Item {
         const applications = scored.map((item) => {
             return item.application;
         });
+        // While searching, keep the relevance ordering above intact. Pins are
+        // only promoted for the empty launcher view.
+        if (terms.length > 0)
+            return applications;
+
         // Preserve the order in which apps were pinned. A newly pinned app is
         // appended to the stored IDs, so it appears below existing pins.
         const pinned = [];
@@ -270,7 +280,7 @@ Item {
                     id: launcherContent
 
                     anchors.fill: parent
-                    anchors.margins: 18
+                    anchors.margins: 14
                     spacing: 12
                     opacity: card.contentProgress
 
@@ -282,6 +292,11 @@ Item {
                         Text {
                             width: 20
                             anchors.verticalCenter: parent.verticalCenter
+                            anchors.left: parent.left
+                            anchors.leftMargin: 2
+                            elide: Text.ElideRight
+                            verticalAlignment: Text.AlignVCenter
+                            horizontalAlignment: Text.AlignHCenter
                             text: "󰍉"
                             font.family: Services.Theme.fontFamily
                             font.pixelSize: 19
@@ -293,6 +308,9 @@ Item {
 
                             width: parent.width - 30
                             height: parent.height
+                            anchors.verticalCenter: parent.verticalCenter
+                            anchors.left: parent.left
+                            anchors.leftMargin: 30
                             focus: launcherWindow.visible
                             clip: true
                             color: Services.Theme.text
@@ -441,7 +459,7 @@ Item {
 
                                 IconImage {
                                     anchors.left: parent.left
-                                    anchors.leftMargin: 38
+                                    anchors.leftMargin: 12
                                     anchors.verticalCenter: parent.verticalCenter
                                     width: 26
                                     height: 26
@@ -453,7 +471,7 @@ Item {
 
                                 Column {
                                     anchors.left: parent.left
-                                    anchors.leftMargin: 76
+                                    anchors.leftMargin: 48
                                     anchors.right: parent.right
                                     anchors.rightMargin: 14
                                     anchors.verticalCenter: parent.verticalCenter
