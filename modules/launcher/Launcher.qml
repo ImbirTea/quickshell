@@ -28,7 +28,15 @@ Item {
     }
 
     function normalize(value) {
-        return (value || "").toLocaleLowerCase();
+        if (value === undefined || value === null)
+            return "";
+
+        if (typeof value === "string")
+            return value.toLocaleLowerCase();
+
+        // array-like значение (list<string> из QML — keywords/categories),
+        // не обязательно проходит Array.isArray, но поддерживает join через call
+        return Array.prototype.join.call(value, " ").toLocaleLowerCase();
     }
 
     function filterApplications(searchText) {
@@ -457,16 +465,39 @@ Item {
                                 readonly property bool hovered: rowMouse.containsMouse || pinMouse.containsMouse
                                 color: hovered && resultRow.index !== root.selectedIndex ? Qt.rgba(1, 1, 1, 0.055) : "transparent"
 
-                                IconImage {
+                                Item {
+                                    id: iconSlot
+
                                     anchors.left: parent.left
                                     anchors.leftMargin: 12
                                     anchors.verticalCenter: parent.verticalCenter
                                     width: 26
                                     height: 26
-                                    // Prefer a file resolved by the scanner. It avoids Qt's
-                                    // incomplete icon-theme lookup under standalone Hyprland.
-                                    source: resultRow.modelData.iconPath || Quickshell.iconPath(resultRow.modelData.icon, "application-x-executable")
-                                    smooth: true
+
+                                    readonly property string resolvedIcon: Quickshell.iconPath(resultRow.modelData.icon, true)
+
+                                    IconImage {
+                                        anchors.fill: parent
+                                        visible: iconSlot.resolvedIcon.length > 0
+                                        source: iconSlot.resolvedIcon
+                                        smooth: true
+                                    }
+
+                                    Rectangle {
+                                        anchors.fill: parent
+                                        visible: iconSlot.resolvedIcon.length === 0
+                                        radius: 6
+                                        color: Qt.rgba(1, 1, 1, 0.08)
+
+                                        Text {
+                                            anchors.centerIn: parent
+                                            text: (resultRow.modelData.name || "?").charAt(0).toUpperCase()
+                                            font.family: Services.Theme.fontFamily
+                                            font.pixelSize: 14
+                                            font.bold: true
+                                            color: Services.Theme.textDim
+                                        }
+                                    }
                                 }
 
                                 Column {
