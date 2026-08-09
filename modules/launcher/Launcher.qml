@@ -1,7 +1,7 @@
 import "../services" as Services
 import QtQuick
 import QtQuick.Layouts
-import Qt.labs.settings
+import QtCore
 import Quickshell
 import Quickshell.Hyprland
 import Quickshell.Wayland
@@ -21,6 +21,11 @@ Item {
     Settings {
         id: launcherSettings
 
+        // Explicit location bypasses Qt's organizationName/applicationName lookup
+        // entirely (unset under standalone Hyprland, which caused the QSettings
+        // init warning) — Quickshell.statePath() gives us a reserved, per-shell
+        // writable directory to store it in.
+        location: "file://" + Quickshell.statePath("launcher-settings.ini")
         category: "application-launcher"
         // Keep IDs instead of whole application objects: desktop metadata can
         // change between reloads, while the desktop-file ID remains stable.
@@ -292,16 +297,14 @@ Item {
                     spacing: 12
                     opacity: card.contentProgress
 
-                    Row {
+                    RowLayout {
                         width: parent.width
                         height: 32
                         spacing: 10
 
                         Text {
-                            width: 20
-                            anchors.verticalCenter: parent.verticalCenter
-                            anchors.left: parent.left
-                            anchors.leftMargin: 2
+                            Layout.preferredWidth: 24
+                            Layout.alignment: Qt.AlignVCenter
                             elide: Text.ElideRight
                             verticalAlignment: Text.AlignVCenter
                             horizontalAlignment: Text.AlignHCenter
@@ -314,11 +317,8 @@ Item {
                         TextInput {
                             id: searchInput
 
-                            width: parent.width - 30
+                            Layout.fillWidth: true
                             height: parent.height
-                            anchors.verticalCenter: parent.verticalCenter
-                            anchors.left: parent.left
-                            anchors.leftMargin: 30
                             focus: launcherWindow.visible
                             clip: true
                             color: Services.Theme.text
@@ -352,9 +352,7 @@ Item {
                                 font: searchInput.font
                                 color: Qt.rgba(Services.Theme.textDim.r, Services.Theme.textDim.g, Services.Theme.textDim.b, 0.72)
                             }
-
                         }
-
                     }
 
                     Rectangle {
@@ -633,7 +631,7 @@ Item {
                             height: 18
                             radius: 4
                             color: Services.Theme.selectionBg
-                            anchors.verticalCenter: parent.verticalCenter
+                            Layout.alignment: Qt.AlignVCenter
 
                             Text {
                                 id: escText
@@ -646,7 +644,7 @@ Item {
                         }
 
                         Text {
-                            anchors.verticalCenter: parent.verticalCenter
+                            Layout.alignment: Qt.AlignVCenter
                             text: "Close"
                             font.family: Services.Theme.fontFamily
                             font.pixelSize: 12
@@ -659,7 +657,7 @@ Item {
                         }
 
                         Text {
-                            anchors.verticalCenter: parent.verticalCenter
+                            Layout.alignment: Qt.AlignVCenter
                             text: "Open" + (root.matches.length > 0 ? " " + root.matches[root.selectedIndex].name : "")
                             font.family: Services.Theme.fontFamily
                             font.pixelSize: 12
@@ -671,7 +669,7 @@ Item {
                             height: 18
                             radius: 4
                             color: Services.Theme.selectionBg
-                            anchors.verticalCenter: parent.verticalCenter
+                            Layout.alignment: Qt.AlignVCenter
 
                             Text {
                                 id: enterText
@@ -694,7 +692,7 @@ Item {
                             height: 18
                             radius: 4
                             color: Services.Theme.selectionBg
-                            anchors.verticalCenter: parent.verticalCenter
+                            Layout.alignment: Qt.AlignVCenter
 
                             Text {
                                 id: arrowsText
@@ -708,7 +706,7 @@ Item {
                         }
 
                         Text {
-                            anchors.verticalCenter: parent.verticalCenter
+                            Layout.alignment: Qt.AlignVCenter
                             text: "Navigate"
                             font.family: Services.Theme.fontFamily
                             font.pixelSize: 12

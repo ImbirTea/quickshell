@@ -51,8 +51,10 @@ Item {
 
             IconImage {
                 anchors.fill: parent
-                source: trayIcon.modelData.icon
+                implicitSize: root.iconSize
                 smooth: true
+                mipmap: true
+                source: trayIcon.modelData.icon
             }
 
             MouseArea {

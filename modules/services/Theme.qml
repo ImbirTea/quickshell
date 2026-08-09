@@ -14,8 +14,8 @@ QtObject {
     // the wallpaper subtly show through without changing the palette itself.
     readonly property color bgTop: Qt.rgba(0.094, 0.086, 0.086, 0.6)
     readonly property color bgBottom: Qt.rgba(0.118, 0.106, 0.106, 0.6)
-    readonly property color bgTopA: Qt.rgba(0.094, 0.086, 0.086, 0.2)
-    readonly property color bgBottomA: Qt.rgba(0.118, 0.106, 0.106, 0.2)
+    readonly property color bgTopA: Qt.rgba(0.094, 0.086, 0.086, 0.27)
+    readonly property color bgBottomA: Qt.rgba(0.118, 0.106, 0.106, 0.27)
     readonly property int fontSize: 14
     readonly property string fontFamily: "JetBrainsMono Nerd Font"
     // This remains writable to allow later configuration overrides.
