@@ -80,7 +80,7 @@ RowLayout {
         Text {
             id: arrowsText
             anchors.centerIn: parent
-            text: ""
+            text: ""
             rotation: 90
             font.family: Services.Theme.fontFamily
             font.pixelSize: 10

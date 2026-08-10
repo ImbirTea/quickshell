@@ -15,19 +15,15 @@ Item {
     readonly property var pinnedApplicationIds: launcherSettings.pinnedApplicationIds || []
     readonly property var matches: filterApplications(query)
     readonly property alias appsService: appsService
+    readonly property var usageCounts: parseUsage(launcherSettings.usageJson)
 
     Settings {
         id: launcherSettings
 
-        // Explicit location bypasses Qt's organizationName/applicationName lookup
-        // entirely (unset under standalone Hyprland, which caused the QSettings
-        // init warning) — Quickshell.statePath() gives us a reserved, per-shell
-        // writable directory to store it in.
         location: "file://" + Quickshell.statePath("launcher-settings.ini")
         category: "application-launcher"
-        // Keep IDs instead of whole application objects: desktop metadata can
-        // change between reloads, while the desktop-file ID remains stable.
         property var pinnedApplicationIds: []
+        property string usageJson: "{}"
     }
 
     function normalize(value) {
@@ -37,9 +33,31 @@ Item {
         if (typeof value === "string")
             return value.toLocaleLowerCase();
 
-        // array-like значение (list<string> из QML — keywords/categories),
-        // не обязательно проходит Array.isArray, но поддерживает join через call
         return Array.prototype.join.call(value, " ").toLocaleLowerCase();
+    }
+
+    function parseUsage(json) {
+        try {
+            const parsed = JSON.parse(json || "{}");
+            return parsed && typeof parsed === "object" ? parsed : {};
+        } catch (e) {
+            return {};
+        }
+    }
+
+    function usesCount(applicationId) {
+        if (!applicationId)
+            return 0;
+        const count = usageCounts[applicationId];
+        return typeof count === "number" ? count : 0;
+    }
+
+    function recordUsage(applicationId) {
+        if (!applicationId)
+            return;
+        const next = Object.assign({}, usageCounts);
+        next[applicationId] = (next[applicationId] || 0) + 1;
+        launcherSettings.usageJson = JSON.stringify(next);
     }
 
     function filterApplications(searchText) {
@@ -69,8 +87,6 @@ Item {
                 else
                     score += 15;
             }
-            // Prefer a pinned app when its text match is otherwise equally
-            // strong, without displacing substantially better matches.
             if (terms.length > 0 && isPinned(application.id))
                 score += pinnedSearchScoreBonus;
             scored.push({
@@ -79,18 +95,19 @@ Item {
             });
         }
         scored.sort((left, right) => {
-            return right.score - left.score || left.application.name.localeCompare(right.application.name);
+            if (right.score !== left.score)
+                return right.score - left.score;
+            const usageDiff = usesCount(right.application.id) - usesCount(left.application.id);
+            if (usageDiff !== 0)
+                return usageDiff;
+            return left.application.name.localeCompare(right.application.name);
         });
         const applications = scored.map((item) => {
             return item.application;
         });
-        // While searching, keep the relevance ordering above intact. Pins are
-        // only promoted for the empty launcher view.
         if (terms.length > 0)
             return applications;
 
-        // Preserve the order in which apps were pinned. A newly pinned app is
-        // appended to the stored IDs, so it appears below existing pins.
         const pinned = [];
         const unpinned = [];
         for (const pinnedId of pinnedApplicationIds) {
@@ -160,6 +177,7 @@ Item {
             return ;
 
         const application = matches[selectedIndex];
+        recordUsage(application.id);
         if (application.runInTerminal && application.command.length > 0) {
             Quickshell.execDetached({
                 command: ["kitty"].concat(application.command),
@@ -182,14 +200,11 @@ Item {
         id: appsService
     }
 
-    // One window per screen; each stays hidden until openRequested targets it.
     Variants {
         model: Quickshell.screens
 
         LauncherWindow {
             launcher: root
         }
-
     }
-
 }

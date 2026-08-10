@@ -60,14 +60,16 @@ PanelWindow {
     Rectangle {
         id: card
 
-        readonly property real expandedHeight: Math.min(552, parent.height - 72)
+        readonly property real expandedHeight: Math.min(440, parent.height - 72)
         property real revealProgress: 1
         property real contentProgress: 1
 
-        anchors.centerIn: parent
-        width: Math.min(760, parent.width - 48)
+        anchors.top: parent.top
+        anchors.topMargin: 5
+        anchors.horizontalCenter: parent.horizontalCenter
+        width: Math.min(660, parent.width - 48)
         height: Math.max(2, expandedHeight * revealProgress)
-        radius: 15
+        radius: 5
         clip: true
         border.width: 1
         border.color: Qt.rgba(1, 1, 1, 0.11)
@@ -107,6 +109,8 @@ PanelWindow {
 
             anchors.fill: parent
             anchors.margins: 14
+            anchors.leftMargin: 10
+            anchors.rightMargin: 10
             spacing: 12
             opacity: card.contentProgress
 
