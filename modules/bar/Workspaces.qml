@@ -90,94 +90,129 @@ RowLayout {
     readonly property bool isSpecialWorkspaceOpen: specialWorkspaceState.activeMonitorName === root.screenName
         && specialWorkspaceState.activeName !== ""
 
-    // Regular workspaces are hidden while a special workspace is open.
-    Repeater {
-        model: root.isSpecialWorkspaceOpen ? [] : root.visibleWorkspaceIds
+    Item {
+        id: workspacesRoot
+        visible: !root.isSpecialWorkspaceOpen
+        implicitWidth: workspacesRow.implicitWidth
+        implicitHeight: workspacesRow.implicitHeight
 
-        // Size one click target around both the workspace label and its window icons.
-        delegate: Item {
-            id: workspaceDelegate
-            required property int modelData
-            readonly property int workspaceId: modelData
-            implicitWidth: workspaceContent.implicitWidth
-            implicitHeight: workspaceContent.implicitHeight
+        RowLayout {
+            id: workspacesRow
+            spacing: 16
 
-            // Resolve the workspace object from the numeric model value so its
-            // dynamic window list can be displayed by the nested repeater.
-            readonly property var workspace: {
-                for (const ws of Hyprland.workspaces.values) {
-                    if (ws.id === workspaceDelegate.workspaceId && ws.monitor && ws.monitor.name === root.screenName)
-                        return ws;
-                }
-                return null;
-            }
+            Repeater {
+                model: root.isSpecialWorkspaceOpen ? [] : root.visibleWorkspaceIds
 
-            property bool isActive: Hyprland.focusedMonitor
-                && Hyprland.focusedMonitor.activeWorkspace
-                && Hyprland.focusedMonitor.activeWorkspace.id === workspaceDelegate.workspaceId
+                delegate: Item {
+                    id: workspaceDelegate
+                    required property int modelData
+                    readonly property int workspaceId: modelData
+                    readonly property bool isWorkspace: true
+                    implicitWidth: workspaceContent.implicitWidth
+                    implicitHeight: workspaceContent.implicitHeight
 
-            readonly property bool hasWindows: workspaceDelegate.workspace
-                && workspaceDelegate.workspace.toplevels.values.length > 0
+                    readonly property var workspace: {
+                        for (const ws of Hyprland.workspaces.values) {
+                            if (ws.id === workspaceDelegate.workspaceId && ws.monitor && ws.monitor.name === root.screenName)
+                                return ws;
+                        }
+                        return null;
+                    }
 
-            RowLayout {
-                id: workspaceContent
-                anchors.fill: parent
-                spacing: 4
+                    property bool isActive: Hyprland.focusedMonitor
+                        && Hyprland.focusedMonitor.activeWorkspace
+                        && Hyprland.focusedMonitor.activeWorkspace.id === workspaceDelegate.workspaceId
 
-                Text {
-                    text: workspaceDelegate.workspaceId + (workspaceDelegate.hasWindows ? ":" : "")
-                    font.family: Services.Theme.fontFamily
-                    font.pixelSize: Services.Theme.fontSize
-                    font.bold: workspaceDelegate.isActive
-                    color: workspaceDelegate.isActive ? Services.Theme.accentActive : Services.Theme.textDim
-                }
+                    readonly property bool hasWindows: workspaceDelegate.workspace
+                        && workspaceDelegate.workspace.toplevels.values.length > 0
 
-                // Show one glyph for every window on this workspace.
-                Repeater {
-                    model: workspaceDelegate.workspace ? workspaceDelegate.workspace.toplevels : []
+                    RowLayout {
+                        id: workspaceContent
+                        anchors.fill: parent
+                        spacing: 4
 
-                    delegate: Text {
-                        required property var modelData
-                        text: root.iconForWindow(modelData)
-                        font.family: Services.Theme.fontFamily
-                        font.pixelSize: Services.Theme.fontSize
-                        color: workspaceDelegate.isActive ? Services.Theme.accentActive : Services.Theme.textDim
+                        Text {
+                            text: workspaceDelegate.workspaceId + (workspaceDelegate.hasWindows ? ":" : "")
+                            font.family: Services.Theme.fontFamily
+                            font.pixelSize: Services.Theme.fontSize
+                            font.bold: workspaceDelegate.isActive
+                            color: workspaceDelegate.isActive ? Services.Theme.accentActive : Services.Theme.textDim
+                        }
+
+                        Repeater {
+                            model: workspaceDelegate.workspace ? workspaceDelegate.workspace.toplevels : []
+
+                            delegate: Text {
+                                required property var modelData
+                                text: root.iconForWindow(modelData)
+                                font.family: Services.Theme.fontFamily
+                                font.pixelSize: Services.Theme.fontSize
+                                color: workspaceDelegate.isActive ? Services.Theme.accentActive : Services.Theme.textDim
+                            }
+                        }
                     }
                 }
             }
+        }
 
-            MouseArea {
-                anchors.fill: parent
-                cursorShape: Qt.PointingHandCursor
-                onClicked: Hyprland.dispatch(`hl.dsp.focus({workspace = ${workspaceDelegate.workspaceId}})`)
+        MouseArea {
+            anchors.fill: workspacesRow
+
+            onClicked: event => {
+                const item = workspacesRow.childAt(event.x, event.y)
+                if (item && item.isWorkspace)
+                    Hyprland.dispatch(`hl.dsp.focus({workspace = ${item.workspaceId}})`)
+            }
+
+            onWheel: wheel => {
+                const ids = root.visibleWorkspaceIds
+                if (ids.length === 0) return
+
+                const current = Hyprland.focusedMonitor?.activeWorkspace?.id
+                let idx = ids.indexOf(current)
+                if (idx === -1) idx = 0
+
+                const nextIdx = wheel.angleDelta.y > 0
+                    ? (idx - 1 + ids.length) % ids.length
+                    : (idx + 1) % ids.length
+
+                Hyprland.dispatch(`hl.dsp.focus({workspace = ${ids[nextIdx]}})`)
             }
         }
     }
 
     // Replace regular workspaces with the active special workspace to avoid two active entries.
-    RowLayout {
+    Item {
         visible: root.isSpecialWorkspaceOpen
-        spacing: 4
+        implicitWidth: specialWorkspaceRow.implicitWidth
+        implicitHeight: specialWorkspaceRow.implicitHeight
+        Layout.alignment: Qt.AlignVCenter
 
-        readonly property bool hasWindows: root.specialWorkspace && root.specialWorkspace.toplevels.values.length > 0
+        RowLayout {
+            id: specialWorkspaceRow
+            anchors.fill: parent
+            spacing: 4
 
-        Text {
-            text: "S" + (parent.hasWindows ? ":" : "")
-            font.family: Services.Theme.fontFamily
-            font.pixelSize: Services.Theme.fontSize
-            font.bold: true
-            color: Services.Theme.accentActive
-        }
+            readonly property bool hasWindows: root.specialWorkspace && root.specialWorkspace.toplevels.values.length > 0
 
-        Repeater {
-            model: root.isSpecialWorkspaceOpen ? root.specialWorkspace.toplevels : []
-
-            delegate: Text {
-                required property var modelData
-                text: root.iconForWindow(modelData)
+            Text {
+                text: "S" + (parent.hasWindows ? ":" : "")
                 font.family: Services.Theme.fontFamily
                 font.pixelSize: Services.Theme.fontSize
+                font.bold: true
                 color: Services.Theme.accentActive
+            }
+
+            Repeater {
+                model: root.isSpecialWorkspaceOpen ? root.specialWorkspace.toplevels : []
+
+                delegate: Text {
+                    required property var modelData
+                    text: root.iconForWindow(modelData)
+                    font.family: Services.Theme.fontFamily
+                    font.pixelSize: Services.Theme.fontSize
+                    color: Services.Theme.accentActive
+                }
             }
         }
     }
