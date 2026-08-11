@@ -8,22 +8,45 @@ PanelWindow {
 
     required property var launcher
     required property var modelData
+    property real barHeight: 28
+    property bool closing: false
+    property bool isVisible: false   // ← единственный источник правды для видимости
+
+    readonly property bool matchesThisScreen: !launcher.targetScreenName || modelData.name === launcher.targetScreenName
 
     function show() {
+        closing = false;
+        isVisible = true;   // ставим сразу, без гонок
+
         launcher.query = "";
         launcher.selectedIndex = 0;
         searchField.clear();
         resultsList.resetScrollPosition();
-        backdrop.opacity = 0;
-        card.opacity = 0;
-        card.revealProgress = 0.006;
+
+        card.horizontalProgress = 0;
+        card.verticalProgress = 0;
         card.contentProgress = 0;
-        entrance.restart();
+        backdrop.opacity = 0;
+
+        closeAnimation.stop();
+        launcher.setTransitioning(true);
+        openAnimation.restart();
         searchField.focusInput();
     }
 
+    function hide() {
+        closing = true;
+        // isVisible остаётся true — окно не прячется, пока не доиграет анимация
+        openAnimation.stop();
+        launcher.setTransitioning(true);
+        closeAnimation.restart();
+    }
+
+    visible: isVisible && matchesThisScreen   // больше НЕ зависит от launcher.openRequested напрямую
+
+
     screen: modelData
-    visible: launcher.openRequested && (!launcher.targetScreenName || modelData.name === launcher.targetScreenName)
+    // visible: (launcher.openRequested || closing) && matchesThisScreen
     implicitWidth: 1
     implicitHeight: 1
     color: "transparent"
@@ -31,10 +54,19 @@ PanelWindow {
     WlrLayershell.keyboardFocus: WlrKeyboardFocus.Exclusive
     WlrLayershell.namespace: "quickshell:application-launcher"
     exclusionMode: ExclusionMode.Ignore
-    onVisibleChanged: {
-        if (visible)
-            show();
 
+    Connections {
+        target: launcher
+
+        function onOpenRequestedChanged() {
+            if (!matchesThisScreen)
+                return;
+
+            if (launcher.openRequested)
+                launcherWindow.show();
+            else
+                launcherWindow.hide();
+        }
     }
 
     anchors {
@@ -61,19 +93,23 @@ PanelWindow {
         id: card
 
         readonly property real expandedHeight: Math.min(440, parent.height - 72)
-        property real revealProgress: 1
+        readonly property real collapsedWidth: Math.min(660, parent.width - 48)
+
+        // 0 = во всю ширину экрана (как бар), 1 = сжат до своей ширины
+        property real horizontalProgress: 1
+        // 0 = высота бара, 1 = полностью раскрыт по высоте
+        property real verticalProgress: 1
         property real contentProgress: 1
 
         anchors.top: parent.top
-        anchors.topMargin: 5
+        anchors.topMargin: 5 * verticalProgress
         anchors.horizontalCenter: parent.horizontalCenter
-        width: Math.min(660, parent.width - 48)
-        height: Math.max(2, expandedHeight * revealProgress)
-        radius: 5
+        width: parent.width - (parent.width - collapsedWidth) * horizontalProgress
+        height: Math.max(2, launcherWindow.barHeight + (expandedHeight - launcherWindow.barHeight) * verticalProgress)
+        radius: 8 * verticalProgress
         clip: true
         border.width: 1
-        border.color: Qt.rgba(1, 1, 1, 0.11)
-        opacity: 0
+        border.color: Qt.rgba(1, 1, 1, 0.11 * verticalProgress)
         layer.enabled: true
         layer.smooth: true
 
@@ -113,6 +149,7 @@ PanelWindow {
             anchors.rightMargin: 10
             spacing: 12
             opacity: card.contentProgress
+            visible: opacity > 0.01
 
             SearchField {
                 id: searchField
@@ -151,8 +188,7 @@ PanelWindow {
 
         }
 
-        // Match the bar's palette while keeping the launcher lighter
-        // so the wallpaper remains visible behind the results.
+        // Тот же градиент, что и у бара — визуальная подмена должна быть незаметна.
         gradient: Gradient {
             orientation: Gradient.Horizontal
 
@@ -170,11 +206,22 @@ PanelWindow {
 
     }
 
-    LauncherEntrance {
-        id: entrance
+    LauncherOpenAnimation {
+        id: openAnimation
 
-        backdrop: backdrop
         card: card
+        backdrop: backdrop
+        onFinished: launcher.setTransitioning(true)
     }
 
+    LauncherCloseAnimation {
+        id: closeAnimation
+        card: card
+        backdrop: backdrop
+        onFinished: {
+            launcherWindow.closing = false;
+            launcherWindow.isVisible = false;   // ← прячем окно только теперь, когда анимация реально закончилась
+            launcher.setTransitioning(false);
+        }
+    }
 }

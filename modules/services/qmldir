@@ -2,3 +2,4 @@ module services
 
 singleton Theme 1.0 Theme.qml
 singleton LayoutService 1.0 LayoutService.qml
+singleton LauncherState 1.0 LauncherState.qml

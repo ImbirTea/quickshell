@@ -1,4 +1,5 @@
 import "./services" as LauncherServices
+import "../services" as Services
 import QtQuick
 import QtCore
 import Quickshell
@@ -15,6 +16,12 @@ Item {
     readonly property var pinnedApplicationIds: launcherSettings.pinnedApplicationIds || []
     readonly property var matches: filterApplications(query)
     readonly property alias appsService: appsService
+    readonly property bool transitioning: Services.LauncherState.transitioning
+
+    function setTransitioning(value) {
+        Services.LauncherState.transitioning = value;
+    }
+
     readonly property var usageCounts: parseUsage(launcherSettings.usageJson)
 
     Settings {
